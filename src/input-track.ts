@@ -16,6 +16,7 @@ import { TrackType } from './output';
 import { EncodedPacket, PacketType } from './packet';
 import { SubtitleCue } from './subtitles';
 import { TrackDisposition } from './metadata';
+import { SubtitleCue } from './subtitles';
 
 /**
  * Contains aggregate statistics about the encoded packets of a track.

@@ -204,7 +204,7 @@ export {
 	AttachedImage,
 	RichImageData,
 	AttachedFile,
-	TrackDisposition,
+	TrackDisposition
 } from './metadata';
 export type { SubtitleMetadata, SubtitleCue, SubtitleConfig } from './subtitles';
 export {

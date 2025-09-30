@@ -34,6 +34,7 @@ import {
 	AudioSource,
 	EncodedVideoPacketSource,
 	EncodedAudioPacketSource,
+	SubtitleSource,
 	VideoSource,
 	VideoSampleSource,
 	AudioSampleSource,
