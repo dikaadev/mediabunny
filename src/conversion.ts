@@ -1163,6 +1163,7 @@ export class Conversion {
 								duration: 1 / frameRate,
 							});
 							await this._registerVideoSample(track, trackOptions, source, sample);
+							sample.close();
 						}
 					};
 
@@ -1199,12 +1200,11 @@ export class Conversion {
 							duration: frameRate !== undefined ? 1 / frameRate : duration,
 						});
 						await this._registerVideoSample(track, trackOptions, source, sample);
+						sample.close();
 
 						if (frameRate !== undefined) {
 							lastCanvas = canvas;
 							lastCanvasTimestamp = adjustedSampleTimestamp;
-						} else {
-							sample.close();
 						}
 					}
 
