@@ -65,7 +65,6 @@ import {
 	readElementHeader,
 	readElementId,
 	readFloat,
-	readSignedInt,
 	readUnsignedInt,
 	readVarInt,
 	resync,
@@ -141,7 +140,6 @@ type ClusterBlock = {
 	timestamp: number;
 	duration: number;
 	isKeyFrame: boolean;
-	referencedTimestamps: number[];
 	data: Uint8Array;
 	lacing: BlockLacing;
 	decoded: boolean;
@@ -659,19 +657,13 @@ export class MatroskaDemuxer extends Demuxer {
 			// This must hold, as track datas only get created if a block for that track is encountered
 			assert(trackData.blocks.length > 0);
 
-			let blockReferencesExist = false;
 			let hasLacedBlocks = false;
 
 			for (let i = 0; i < trackData.blocks.length; i++) {
 				const block = trackData.blocks[i]!;
 				block.timestamp += cluster.timestamp;
 
-				blockReferencesExist ||= block.referencedTimestamps.length > 0;
 				hasLacedBlocks ||= block.lacing !== BlockLacing.None;
-			}
-
-			if (blockReferencesExist) {
-				trackData.blocks = sortBlocksByReferences(trackData.blocks);
 			}
 
 			trackData.presentationTimestamps = trackData.blocks
@@ -869,7 +861,6 @@ export class MatroskaDemuxer extends Demuxer {
 					timestamp: frameTimestamp,
 					duration: frameDuration,
 					isKeyFrame: originalBlock.isKeyFrame,
-					referencedTimestamps: originalBlock.referencedTimestamps,
 					data: frameData,
 					lacing: BlockLacing.None,
 					decoded: true,
@@ -1432,7 +1423,6 @@ export class MatroskaDemuxer extends Demuxer {
 					timestamp: relativeTimestamp, // We'll add the cluster's timestamp to this later
 					duration: 0, // Will set later
 					isKeyFrame,
-					referencedTimestamps: [],
 					data: blockData,
 					lacing,
 					decoded: !hasDecodingInstructions,
@@ -1445,13 +1435,7 @@ export class MatroskaDemuxer extends Demuxer {
 
 				this.readContiguousElements(slice.slice(dataStartPos, size));
 
-				if (this.currentBlock) {
-					for (let i = 0; i < this.currentBlock.referencedTimestamps.length; i++) {
-						this.currentBlock.referencedTimestamps[i]! += this.currentBlock.timestamp;
-					}
-
-					this.currentBlock = null;
-				}
+				this.currentBlock = null;
 			}; break;
 
 			case EBMLId.Block: {
@@ -1475,7 +1459,6 @@ export class MatroskaDemuxer extends Demuxer {
 					timestamp: relativeTimestamp, // We'll add the cluster's timestamp to this later
 					duration: 0, // Will set later
 					isKeyFrame: true,
-					referencedTimestamps: [],
 					data: blockData,
 					lacing,
 					decoded: !hasDecodingInstructions,
@@ -1526,11 +1509,8 @@ export class MatroskaDemuxer extends Demuxer {
 				if (!this.currentBlock) break;
 
 				this.currentBlock.isKeyFrame = false;
-
-				const relativeTimestamp = readSignedInt(slice, size);
-
-				// We'll offset this by the block's timestamp later
-				this.currentBlock.referencedTimestamps.push(relativeTimestamp);
+				// We ignore the actual value here, we just use the reference as an indicator for "not a key frame".
+				// This is in line with FFmpeg's behavior.
 			}; break;
 
 			case EBMLId.Tag: {
