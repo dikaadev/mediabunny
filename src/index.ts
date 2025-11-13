@@ -204,7 +204,8 @@ export {
 	AttachedImage,
 	RichImageData,
 	AttachedFile,
-} from './tags';
+	TrackDisposition,
+} from './metadata';
 export type { SubtitleMetadata, SubtitleCue, SubtitleConfig } from './subtitles';
 export {
 	parseSrtTimestamp,
@@ -217,5 +218,4 @@ export {
 	splitAssIntoCues,
 	formatCuesToAss,
 } from './subtitles';
-
 // 🐡🦔

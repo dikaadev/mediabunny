@@ -52,8 +52,8 @@ import {
 import { Output, SubtitleTrackMetadata, TrackType } from './output';
 import { Mp4OutputFormat } from './output-format';
 import { AudioSample, clampCropRectangle, validateCropRectangle, VideoSample } from './sample';
+import { MetadataTags, validateMetadataTags } from './metadata';
 import { formatCuesToAss, formatCuesToSrt, formatCuesToWebVTT, SubtitleCue } from './subtitles';
-import { MetadataTags, validateMetadataTags } from './tags';
 import { NullTarget } from './target';
 
 /**
@@ -1304,9 +1304,10 @@ export class Conversion {
 
 		this.output.addVideoTrack(videoSource, {
 			frameRate: trackOptions.frameRate,
-			// TEMP: This condition can be removed when all demuxers properly homogenize to BCP47 in v2
+			// TODO: This condition can be removed when all demuxers properly homogenize to BCP47 in v2
 			languageCode: isIso639Dash2LanguageCode(track.languageCode) ? track.languageCode : undefined,
 			name: track.name ?? undefined,
+			disposition: track.disposition,
 			rotation: needsRerender ? 0 : totalRotation, // Rerendering will bake the rotation into the output
 		});
 		this._addedCounts.video++;
@@ -1543,9 +1544,10 @@ export class Conversion {
 		}
 
 		this.output.addAudioTrack(audioSource, {
-			// TEMP: This condition can be removed when all demuxers properly homogenize to BCP47 in v2
+			// TODO: This condition can be removed when all demuxers properly homogenize to BCP47 in v2
 			languageCode: isIso639Dash2LanguageCode(track.languageCode) ? track.languageCode : undefined,
 			name: track.name ?? undefined,
+			disposition: track.disposition,
 		});
 		this._addedCounts.audio++;
 		this._totalTrackCount++;
