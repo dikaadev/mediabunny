@@ -14,7 +14,6 @@ import { EncodedPacketSink, PacketRetrievalOptions } from './media-sink';
 import { assert, Rotation } from './misc';
 import { TrackType } from './output';
 import { EncodedPacket, PacketType } from './packet';
-import { SubtitleCue } from './subtitles';
 import { TrackDisposition } from './metadata';
 import { SubtitleCue } from './subtitles';
 
