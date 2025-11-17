@@ -39,8 +39,6 @@ import {
 	VideoSource,
 	VideoSampleSource,
 	AudioSampleSource,
-	SubtitleSource,
-	TextSubtitleSource
 } from './media-source';
 import {
 	assert,
@@ -54,7 +52,6 @@ import {
 import { Output, SubtitleTrackMetadata, TrackType } from './output';
 import { Mp4OutputFormat } from './output-format';
 import { AudioSample, clampCropRectangle, validateCropRectangle, VideoSample } from './sample';
-import { formatCuesToAss, formatCuesToSrt, formatCuesToWebVTT, SubtitleCue } from './subtitles';
 import { MetadataTags, validateMetadataTags } from './metadata';
 import { formatCuesToAss, formatCuesToSrt, formatCuesToWebVTT, SubtitleCue } from './subtitles';
 import { NullTarget } from './target';
@@ -1558,119 +1555,6 @@ export class Conversion {
 		this.utilizedTracks.push(track);
 	}
 
-	/** @internal */
-	async _processSubtitleTrack(track: InputSubtitleTrack, trackOptions: ConversionSubtitleOptions) {
-		const sourceCodec = track.codec;
-		if (!sourceCodec) {
-			this.discardedTracks.push({
-				track,
-				reason: 'unknown_source_codec',
-			});
-			return;
-		}
-
-		// Determine target codec
-		let targetCodec = trackOptions.codec ?? sourceCodec;
-		const supportedCodecs = this.output.format.getSupportedSubtitleCodecs();
-
-		// Check if target codec is supported by output format
-		if (!supportedCodecs.includes(targetCodec)) {
-			// Try to use source codec if no specific codec was requested
-			if (!trackOptions.codec && supportedCodecs.includes(sourceCodec)) {
-				targetCodec = sourceCodec;
-			} else {
-				// If a specific codec was requested but not supported, or source codec not supported, discard
-				this.discardedTracks.push({
-					track,
-					reason: 'no_encodable_target_codec',
-				});
-				return;
-			}
-		}
-
-		// Create subtitle source
-		const subtitleSource = new TextSubtitleSource(targetCodec);
-
-		// Add track promise to extract and add subtitle cues
-		this._trackPromises.push((async () => {
-			await this._started;
-
-			let subtitleText: string;
-
-			// If no trim or codec conversion needed, use the efficient export method
-			if (this._startTimestamp === 0 && !Number.isFinite(this._endTimestamp) && targetCodec === sourceCodec) {
-				subtitleText = await track.exportToText();
-			} else {
-				// Extract and adjust cues for trim/conversion
-				const cues: SubtitleCue[] = [];
-				for await (const cue of track.getCues()) {
-					const cueEndTime = cue.timestamp + cue.duration;
-
-					// Apply trim if needed
-					if (this._startTimestamp > 0 || Number.isFinite(this._endTimestamp)) {
-						// Skip cues completely outside trim range
-						if (cueEndTime <= this._startTimestamp || cue.timestamp >= this._endTimestamp) {
-							continue;
-						}
-
-						// Adjust cue timing
-						const adjustedTimestamp = Math.max(cue.timestamp - this._startTimestamp, 0);
-						const adjustedEndTime = Math.min(cueEndTime - this._startTimestamp, this._endTimestamp - this._startTimestamp);
-
-						cues.push({
-							...cue,
-							timestamp: adjustedTimestamp,
-							duration: adjustedEndTime - adjustedTimestamp,
-						});
-					} else {
-						cues.push(cue);
-					}
-
-					if (this._canceled) {
-						return;
-					}
-				}
-
-				// Convert to target format
-				if (targetCodec === 'srt') {
-					subtitleText = formatCuesToSrt(cues);
-				} else if (targetCodec === 'webvtt') {
-					subtitleText = formatCuesToWebVTT(cues);
-				} else if (targetCodec === 'ass' || targetCodec === 'ssa') {
-					// When converting to ASS/SSA, try to preserve the header from source if it's also ASS/SSA
-					let header = '';
-					if (sourceCodec === 'ass' || sourceCodec === 'ssa') {
-						// Get the full text to extract header
-						const fullText = await track.exportToText();
-						const eventsIndex = fullText.indexOf('[Events]');
-						if (eventsIndex !== -1) {
-							// Extract everything before [Events] + Format line
-							const formatMatch = fullText.substring(eventsIndex).match(/Format:[^\n]+\n/);
-							if (formatMatch) {
-								header = fullText.substring(0, eventsIndex + formatMatch.index! + formatMatch[0].length);
-							}
-						}
-					}
-					subtitleText = formatCuesToAss(cues, header);
-				} else {
-					// For other formats (tx3g, ttml), export from track
-					subtitleText = await track.exportToText(targetCodec);
-				}
-			}
-
-			await subtitleSource.add(subtitleText);
-			subtitleSource.close();
-		})());
-
-		this.output.addSubtitleTrack(subtitleSource, {
-			languageCode: isIso639Dash2LanguageCode(track.languageCode) ? track.languageCode : undefined,
-			name: track.name ?? undefined,
-		});
-		this._addedCounts.subtitle++;
-		this._totalTrackCount++;
-
-		this.utilizedTracks.push(track);
-	}
 
 	/** @internal */
 	async _registerAudioSample(
