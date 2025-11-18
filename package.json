@@ -1,9 +1,12 @@
 {
-  "name": "mediabunny",
+  "name": "@dikaadev/mediabunny",
   "author": "Vanilagy",
   "version": "1.26.0",
   "description": "Pure TypeScript media toolkit for reading, writing, and converting media files, directly in the browser.",
   "type": "module",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
   "workspaces": [
     "packages/*"
   ],
