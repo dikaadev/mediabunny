@@ -87,7 +87,12 @@ export const AUDIO_CODECS = [
  */
 export const SUBTITLE_CODECS = [
 	'webvtt',
-] as const; // TODO add the rest
+	'tx3g',
+	'ttml',
+	'srt',
+	'ass',
+	'ssa',
+] as const;
 
 /**
  * Union type of known video codecs.
@@ -337,6 +342,7 @@ export const extractVideoCodecString = (trackInfo: {
 	codec: VideoCodec | null;
 	codecDescription: Uint8Array | null;
 	colorSpace: VideoColorSpaceInit | null;
+	avcType: 1 | 3 | null;
 	avcCodecInfo: AvcDecoderConfigurationRecord | null;
 	hevcCodecInfo: HevcDecoderConfigurationRecord | null;
 	vp9CodecInfo: Vp9CodecInfo | null;
@@ -345,6 +351,8 @@ export const extractVideoCodecString = (trackInfo: {
 	const { codec, codecDescription, colorSpace, avcCodecInfo, hevcCodecInfo, vp9CodecInfo, av1CodecInfo } = trackInfo;
 
 	if (codec === 'avc') {
+		assert(trackInfo.avcType !== null);
+
 		if (avcCodecInfo) {
 			const bytes = new Uint8Array([
 				avcCodecInfo.avcProfileIndication,
@@ -352,14 +360,14 @@ export const extractVideoCodecString = (trackInfo: {
 				avcCodecInfo.avcLevelIndication,
 			]);
 
-			return `avc1.${bytesToHexString(bytes)}`;
+			return `avc${trackInfo.avcType}.${bytesToHexString(bytes)}`;
 		}
 
 		if (!codecDescription || codecDescription.byteLength < 4) {
 			throw new TypeError('AVC decoder description is not provided or is not at least 4 bytes long.');
 		}
 
-		return `avc1.${bytesToHexString(codecDescription.subarray(1, 4))}`;
+		return `avc${trackInfo.avcType}.${bytesToHexString(codecDescription.subarray(1, 4))}`;
 	} else if (codec === 'hevc') {
 		let generalProfileSpace: number;
 		let generalProfileIdc: number;
@@ -621,6 +629,54 @@ export const parseAacAudioSpecificConfig = (bytes: Uint8Array | null): AacAudioS
 	};
 };
 
+export const buildAacAudioSpecificConfig = (config: {
+	objectType: number;
+	sampleRate: number;
+	numberOfChannels: number;
+}) => {
+	let frequencyIndex = aacFrequencyTable.indexOf(config.sampleRate);
+	let customSampleRate: number | null = null;
+
+	if (frequencyIndex === -1) {
+		frequencyIndex = 15;
+		customSampleRate = config.sampleRate;
+	}
+
+	const channelConfiguration = aacChannelMap.indexOf(config.numberOfChannels);
+	if (channelConfiguration === -1) {
+		throw new TypeError(`Unsupported number of channels: ${config.numberOfChannels}`);
+	}
+
+	let bitCount = 5 + 4 + 4;
+	if (config.objectType >= 32) {
+		bitCount += 6;
+	}
+	if (frequencyIndex === 15) {
+		bitCount += 24;
+	}
+
+	const byteCount = Math.ceil(bitCount / 8);
+	const bytes = new Uint8Array(byteCount);
+	const bitstream = new Bitstream(bytes);
+
+	if (config.objectType < 32) {
+		bitstream.writeBits(5, config.objectType);
+	} else {
+		bitstream.writeBits(5, 31);
+		bitstream.writeBits(6, config.objectType - 32);
+	}
+
+	bitstream.writeBits(4, frequencyIndex);
+
+	if (frequencyIndex === 15) {
+		bitstream.writeBits(24, customSampleRate!);
+	}
+
+	bitstream.writeBits(4, channelConfiguration);
+
+	return bytes;
+};
+
 export const OPUS_SAMPLE_RATE = 48_000;
 
 const PCM_CODEC_REGEX = /^pcm-([usf])(\d+)+(be)?$/;
@@ -694,6 +750,12 @@ export const inferCodecFromCodecString = (codecString: string): MediaCodec | nul
 	// Subtitle codecs
 	if (codecString === 'webvtt') {
 		return 'webvtt';
+	} else if (codecString === 'srt') {
+		return 'srt';
+	} else if (codecString === 'ass') {
+		return 'ass';
+	} else if (codecString === 'ssa') {
+		return 'ssa';
 	}
 
 	return null;

@@ -46,6 +46,7 @@ import {
 	formatSubtitleTimestamp,
 	inlineTimestampRegex,
 	parseSubtitleTimestamp,
+	convertDialogueLineToMkvFormat,
 } from '../subtitles';
 import {
 	OPUS_SAMPLE_RATE,
@@ -63,10 +64,10 @@ import { Muxer } from '../muxer';
 import { Writer } from '../writer';
 import { EncodedPacket } from '../packet';
 import { parseOpusIdentificationHeader } from '../codec-data';
-import { AttachedFile } from '../tags';
+import { AttachedFile } from '../metadata';
 
-const MIN_CLUSTER_TIMESTAMP_MS = -(2 ** 15);
-const MAX_CLUSTER_TIMESTAMP_MS = 2 ** 15 - 1;
+const MIN_CLUSTER_TIMESTAMP_MS = /* #__PURE__ */ -(2 ** 15);
+const MAX_CLUSTER_TIMESTAMP_MS = /* #__PURE__ */ 2 ** 15 - 1;
 const APP_NAME = 'Mediabunny';
 const SEGMENT_SIZE_BYTES = 6;
 const CLUSTER_SIZE_BYTES = 5;
@@ -304,6 +305,24 @@ export class MatroskaMuxer extends Muxer {
 				{ id: EBMLId.TrackNumber, data: trackData.track.id },
 				{ id: EBMLId.TrackUID, data: trackData.track.id },
 				{ id: EBMLId.TrackType, data: TRACK_TYPE_MAP[trackData.type] },
+				trackData.track.metadata.disposition?.default === false
+					? { id: EBMLId.FlagDefault, data: 0 }
+					: null,
+				trackData.track.metadata.disposition?.forced
+					? { id: EBMLId.FlagForced, data: 1 }
+					: null,
+				trackData.track.metadata.disposition?.hearingImpaired
+					? { id: EBMLId.FlagHearingImpaired, data: 1 }
+					: null,
+				trackData.track.metadata.disposition?.visuallyImpaired
+					? { id: EBMLId.FlagVisualImpaired, data: 1 }
+					: null,
+				trackData.track.metadata.disposition?.original
+					? { id: EBMLId.FlagOriginal, data: 1 }
+					: null,
+				trackData.track.metadata.disposition?.commentary
+					? { id: EBMLId.FlagCommentary, data: 1 }
+					: null,
 				{ id: EBMLId.FlagLacing, data: 0 },
 				{ id: EBMLId.Language, data: trackData.track.metadata.languageCode ?? UNDETERMINED_LANGUAGE },
 				{ id: EBMLId.CodecID, data: codecId },
@@ -683,7 +702,12 @@ export class MatroskaMuxer extends Muxer {
 				return trackData.info.decoderConfig.codec;
 			} else {
 				const map: Record<SubtitleCodec, string> = {
-					webvtt: 'wvtt',
+					webvtt: 'S_TEXT/WEBVTT',
+					tx3g: 'S_TEXT/UTF8', // Matroska doesn't have tx3g, convert to SRT
+					ttml: 'S_TEXT/WEBVTT', // Matroska doesn't have TTML, convert to WebVTT
+					srt: 'S_TEXT/UTF8',
+					ass: 'S_TEXT/ASS',
+					ssa: 'S_TEXT/SSA',
 				};
 				return map[trackData.track.source._codec];
 			}
@@ -876,14 +900,17 @@ export class MatroskaMuxer extends Muxer {
 			let bodyText = cue.text;
 			const timestampMs = Math.round(timestamp * 1000);
 
-			// Replace in-body timestamps so that they're relative to the cue start time
-			inlineTimestampRegex.lastIndex = 0;
-			bodyText = bodyText.replace(inlineTimestampRegex, (match) => {
-				const time = parseSubtitleTimestamp(match.slice(1, -1));
-				const offsetTime = time - timestampMs;
+			if (track.source._codec === 'ass' || track.source._codec === 'ssa') {
+				bodyText = convertDialogueLineToMkvFormat(bodyText);
+			} else {
+				inlineTimestampRegex.lastIndex = 0;
+				bodyText = bodyText.replace(inlineTimestampRegex, (match) => {
+					const time = parseSubtitleTimestamp(match.slice(1, -1));
+					const offsetTime = time - timestampMs;
 
-				return `<${formatSubtitleTimestamp(offsetTime)}>`;
-			});
+					return `<${formatSubtitleTimestamp(offsetTime)}>`;
+				});
+			}
 
 			const body = textEncoder.encode(bodyText);
 			const additions = `${cue.settings ?? ''}\n${cue.identifier ?? ''}\n${cue.notes ?? ''}`;

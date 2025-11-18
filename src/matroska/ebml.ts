@@ -88,6 +88,10 @@ export enum EBMLId {
 	FlagEnabled = 0xb9,
 	FlagDefault = 0x88,
 	FlagForced = 0x55aa,
+	FlagOriginal = 0x55ae,
+	FlagHearingImpaired = 0x55ab,
+	FlagVisualImpaired = 0x55ac,
+	FlagCommentary = 0x55af,
 	FlagLacing = 0x9c,
 	Name = 0x536e,
 	Language = 0x22b59c,
@@ -463,7 +467,7 @@ export class EBMLWriter {
 
 export const MAX_VAR_INT_SIZE = 8;
 export const MIN_HEADER_SIZE = 2; // 1-byte ID and 1-byte size
-export const MAX_HEADER_SIZE = 2 * MAX_VAR_INT_SIZE; // 8-byte ID and 8-byte size
+export const MAX_HEADER_SIZE = /* #__PURE__ */ 2 * MAX_VAR_INT_SIZE; // 8-byte ID and 8-byte size
 
 export const readVarIntSize = (slice: FileSlice) => {
 	const firstByte = readU8(slice);
@@ -714,6 +718,9 @@ export const CODEC_STRING_MAP: Partial<Record<MediaCodec, string>> = {
 	'pcm-f64': 'A_PCM/FLOAT/IEEE',
 
 	'webvtt': 'S_TEXT/WEBVTT',
+	'srt': 'S_TEXT/UTF8',
+	'ass': 'S_TEXT/ASS',
+	'ssa': 'S_TEXT/SSA',
 };
 
 export function assertDefinedSize(size: number | null): asserts size is number {

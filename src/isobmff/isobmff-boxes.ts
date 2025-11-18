@@ -44,7 +44,7 @@ import {
 	Sample,
 } from './isobmff-muxer';
 import { parseOpusIdentificationHeader } from '../codec-data';
-import { MetadataTags, RichImageData } from '../tags';
+import { MetadataTags, RichImageData } from '../metadata';
 
 export class IsobmffBoxWriter {
 	private helper = new Uint8Array(8);
@@ -135,8 +135,8 @@ export class IsobmffBoxWriter {
 	}
 }
 
-const bytes = new Uint8Array(8);
-const view = new DataView(bytes.buffer);
+const bytes = /* #__PURE__ */ new Uint8Array(8);
+const view = /* #__PURE__ */ new DataView(bytes.buffer);
 
 const u8 = (value: number) => {
 	return [(value % 0x100 + 0x100) % 0x100];
@@ -243,7 +243,7 @@ const rotationMatrix = (rotationInDegrees: number): TransformationMatrix => {
 		0, 0, 1,
 	];
 };
-const IDENTITY_MATRIX = rotationMatrix(0);
+const IDENTITY_MATRIX = /* #__PURE__ */ rotationMatrix(0);
 
 const matrixToBytes = (matrix: TransformationMatrix) => {
 	return [
@@ -421,7 +421,12 @@ export const tkhd = (
 		matrix = IDENTITY_MATRIX;
 	}
 
-	return fullBox('tkhd', +needsU64, 3, [
+	let flags = 0x2; // Track in movie
+	if (trackData.track.metadata.disposition?.default !== false) {
+		flags |= 0x1; // Track enabled
+	}
+
+	return fullBox('tkhd', +needsU64, flags, [
 		u32OrU64(creationTime), // Creation time
 		u32OrU64(creationTime), // Modification time
 		u32(trackData.track.id), // Track ID
@@ -577,7 +582,7 @@ export const stsd = (trackData: IsobmffTrackData) => {
 
 	if (trackData.type === 'video') {
 		sampleDescription = videoSampleDescription(
-			VIDEO_CODEC_TO_BOX_NAME[trackData.track.source._codec],
+			videoCodecToBoxName(trackData.track.source._codec, trackData.info.decoderConfig.codec),
 			trackData,
 		);
 	} else if (trackData.type === 'audio') {
@@ -589,8 +594,14 @@ export const stsd = (trackData: IsobmffTrackData) => {
 			trackData,
 		);
 	} else if (trackData.type === 'subtitle') {
+		const boxName = SUBTITLE_CODEC_TO_BOX_NAME[trackData.track.source._codec];
+		if (!boxName) {
+			throw new Error(
+				`Subtitle codec '${trackData.track.source._codec}' is not supported in MP4/MOV. Only WebVTT is supported.`,
+			);
+		}
 		sampleDescription = subtitleSampleDescription(
-			SUBTITLE_CODEC_TO_BOX_NAME[trackData.track.source._codec],
+			boxName,
 			trackData,
 		);
 	}
@@ -905,12 +916,20 @@ const pcmC = (trackData: IsobmffAudioTrackData) => {
 export const subtitleSampleDescription = (
 	compressionType: string,
 	trackData: IsobmffSubtitleTrackData,
-) => box(compressionType, [
-	Array(6).fill(0), // Reserved
-	u16(1), // Data reference index
-], [
-	SUBTITLE_CODEC_TO_CONFIGURATION_BOX[trackData.track.source._codec](trackData),
-]);
+) => {
+	const configBox = SUBTITLE_CODEC_TO_CONFIGURATION_BOX[trackData.track.source._codec];
+	if (!configBox) {
+		throw new Error(
+			`Subtitle codec '${trackData.track.source._codec}' is not supported in MP4/MOV. Only WebVTT is supported.`,
+		);
+	}
+	return box(compressionType, [
+		Array(6).fill(0), // Reserved
+		u16(1), // Data reference index
+	], [
+		configBox(trackData),
+	]);
+};
 
 export const vttC = (trackData: IsobmffSubtitleTrackData) => box('vttC', [
 	...textEncoder.encode(trackData.info.config.description),
@@ -1572,12 +1591,14 @@ const dataStringBoxLong = (value: string) => {
 	]);
 };
 
-const VIDEO_CODEC_TO_BOX_NAME: Record<VideoCodec, string> = {
-	avc: 'avc1',
-	hevc: 'hvc1',
-	vp8: 'vp08',
-	vp9: 'vp09',
-	av1: 'av01',
+const videoCodecToBoxName = (codec: VideoCodec, fullCodecString: string) => {
+	switch (codec) {
+		case 'avc': return fullCodecString.startsWith('avc3') ? 'avc3' : 'avc1';
+		case 'hevc': return 'hvc1';
+		case 'vp8': return 'vp08';
+		case 'vp9': return 'vp09';
+		case 'av1': return 'av01';
+	}
 };
 
 const VIDEO_CODEC_TO_CONFIGURATION_BOX: Record<VideoCodec, (trackData: IsobmffVideoTrackData) => Box | null> = {
@@ -1670,15 +1691,19 @@ const audioCodecToConfigurationBox = (codec: AudioCodec, isQuickTime: boolean) =
 	return null;
 };
 
-const SUBTITLE_CODEC_TO_BOX_NAME: Record<SubtitleCodec, string> = {
+const SUBTITLE_CODEC_TO_BOX_NAME: Partial<Record<SubtitleCodec, string>> = {
 	webvtt: 'wvtt',
+	tx3g: 'tx3g',
+	ttml: 'stpp',
 };
 
-const SUBTITLE_CODEC_TO_CONFIGURATION_BOX: Record<
+const SUBTITLE_CODEC_TO_CONFIGURATION_BOX: Partial<Record<
 	SubtitleCodec,
 	(trackData: IsobmffSubtitleTrackData) => Box | null
-> = {
+>> = {
 	webvtt: vttC,
+	tx3g: () => null, // tx3g doesn't require a configuration box
+	ttml: () => null, // stpp configuration is optional
 };
 
 const getLanguageCodeInt = (code: string) => {

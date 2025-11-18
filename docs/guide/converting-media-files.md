@@ -16,6 +16,7 @@ It has the following features:
 - Video transparency removal/preservation
 - Audio resampling
 - Audio up/downmixing
+- User-defined video & audio processing
 
 The conversion API was built to be simple, versatile and extremely performant.
 
@@ -126,7 +127,14 @@ type ConversionVideoOptions = {
 	alpha?: 'discard' | 'keep'; // Defaults to 'discard'
 	keyFrameInterval?: number;
 	forceTranscode?: boolean;
+	process?: (sample: VideoSample) => MaybePromise<
+		CanvasImageSource | VideoSample | (CanvasImageSource | VideoSample)[] | null
+	>;
+	processedWidth?: number;
+	processedHeight?: number;
 };
+
+type MaybePromise<T> = T | Promise<T>;
 ```
 
 For example, here we resize the video track to 720p:
@@ -185,6 +193,39 @@ Use the `keyFrameInterval` property to control the maximum interval in seconds b
 
 If you want to prevent direct copying of media data and force a transcoding step, use `forceTranscode: true`.
 
+### Processing video
+
+The `process` property can be used to define a custom video sample processing function, e.g. for [applying overlays](./quick-start#add-a-video-overlay), color transformations, or timestamp modifications. You are expected to perform this processing yourself, for example using the Canvas API.
+
+An example:
+```ts
+let ctx: CanvasRenderingContext2D | null = null;
+const conversion = await Conversion.init({
+	video: {
+		process: (sample) => {
+			if (!ctx) {
+				const canvas = new OffscreenCanvas(
+					sample.displayWidth,
+					sample.displayHeight,
+				);
+				ctx = canvas.getContext('2d')!;
+
+				// Convert the video to grayscale
+				ctx.filter = 'saturate(0)';
+			}
+			
+			sample.draw(ctx, 0, 0);
+
+			return ctx.canvas;
+		},
+	},
+});
+```
+
+The function is called for each input video sample after transformations and frame rate corrections. It must return a [`VideoSample`](./packets-and-samples#videosample), something that can convert to a `VideoSample`, an array of them, or `null` for dropping the frame.
+
+This function can also be used to manually resize frames. When doing so, you should signal the post-process dimensions using the `processedWidth` and `processedHeight` fields, which enables the encoder to better know what to expect.
+
 ## Audio options
 
 You can set the `audio` property in the conversion options to configure the converter's behavior for audio tracks. The options are:
@@ -196,7 +237,14 @@ type ConversionAudioOptions = {
 	numberOfChannels?: number;
 	sampleRate?: number;
 	forceTranscode?: boolean;
+	process?: (sample: AudioSample) => MaybePromise<
+		AudioSample | AudioSample[] | null
+	>;
+	processedNumberOfChannels?: number;
+	processedSampleRate?: number;
 };
+
+type MaybePromise<T> = T | Promise<T>;
 ```
 
 For example, here we convert the audio track to mono and set a specific sample rate:
@@ -233,11 +281,89 @@ Use the `bitrate` property to control the bitrate of the output audio. For examp
 
 If you want to prevent direct copying of media data and force a transcoding step, use `forceTranscode: true`.
 
+## Subtitle options
+
+You can set the `subtitle` property in the conversion options to configure the converter's behavior for subtitle tracks. The options are:
+```ts
+type ConversionSubtitleOptions = {
+	discard?: boolean;
+	codec?: SubtitleCodec;
+};
+```
+
+For example, here we convert all subtitle tracks to WebVTT format:
+```ts
+const conversion = await Conversion.init({
+	input,
+	output,
+	subtitle: {
+		codec: 'webvtt',
+	},
+});
+```
+
+::: info
+The provided configuration will apply equally to all subtitle tracks of the input. If you want to apply a separate configuration to each subtitle track, check [track-specific options](#track-specific-options).
+:::
+
+### Discarding subtitles
+
+If you want to get rid of subtitle tracks, use `discard: true`.
+
+### Converting subtitle format
+
+Use the `codec` property to control the format of the output subtitle tracks. This should be set to a [codec](./supported-formats-and-codecs#subtitle-codecs) supported by the output file, or else the track will be [discarded](#discarded-tracks).
+
+Subtitle tracks are always copied (extracted and re-muxed as text), never transcoded, so there is no quality loss. The supported formats are WebVTT, SRT, ASS/SSA, TX3G, and TTML.
+
+### Processing audio
+
+The `process` property can be used to define a custom audio sample processing function, e.g. for applying audio effects, transformations, or timestamp modifications. You are expected to perform this processing yourself.
+
+The function is called for each input audio sample after remixing and resampling. It must return an [`AudioSample`](./packets-and-samples#audiosample), an array of them, or `null` for dropping the sample.
+
+This function can also be used to manually perform remixing or resampling. When doing so, you should signal the post-process parameters using the `processedNumberOfChannels` and `processedSampleRate` fields, which enables the encoder to better know what to expect.
+
+## Subtitle options
+
+You can set the `subtitle` property in the conversion options to configure the converter's behavior for subtitle tracks. The options are:
+```ts
+type ConversionSubtitleOptions = {
+	discard?: boolean;
+	codec?: SubtitleCodec;
+};
+```
+
+For example, here we convert all subtitle tracks to WebVTT format:
+```ts
+const conversion = await Conversion.init({
+	input,
+	output,
+	subtitle: {
+		codec: 'webvtt',
+	},
+});
+```
+
+::: info
+The provided configuration will apply equally to all subtitle tracks of the input. If you want to apply a separate configuration to each subtitle track, check [track-specific options](#track-specific-options).
+:::
+
+### Discarding subtitles
+
+If you want to get rid of subtitle tracks, use `discard: true`.
+
+### Converting subtitle format
+
+Use the `codec` property to control the format of the output subtitle tracks. This should be set to a [codec](./supported-formats-and-codecs#subtitle-codecs) supported by the output file, or else the track will be [discarded](#discarded-tracks).
+
+Subtitle tracks are always copied (extracted and re-muxed as text), never transcoded, so there is no quality loss. The supported formats are WebVTT, SRT, ASS/SSA, TX3G, and TTML.
+
 ## Track-specific options
 
-You may want to configure your video and audio options differently depending on the specifics of the input track. Or, in case a media file has multiple video or audio tracks, you may want to discard only specific tracks or configure each track separately.
+You may want to configure your video, audio, and subtitle options differently depending on the specifics of the input track. Or, in case a media file has multiple tracks of the same type, you may want to discard only specific tracks or configure each track separately.
 
-For this, instead of passing an object for `video` and `audio`, you can instead pass a function:
+For this, instead of passing an object for `video`, `audio`, or `subtitle`, you can instead pass a function:
 
 ```ts
 const conversion = await Conversion.init({
@@ -268,10 +394,22 @@ const conversion = await Conversion.init({
 			codec: 'aac',
 		};
 	},
+
+	// Works for subtitles too:
+	subtitle: (subtitleTrack, n) => {
+		if (subtitleTrack.languageCode !== 'eng' && subtitleTrack.languageCode !== 'spa') {
+			// Keep only English and Spanish subtitles
+			return { discard: true };
+		}
+
+		return {
+			codec: 'webvtt',
+		};
+	},
 });
 ```
 
-For documentation about the properties of video and audio tracks, refer to [Reading track metadata](./reading-media-files#reading-track-metadata).
+For documentation about the properties of video, audio, and subtitle tracks, refer to [Reading track metadata](./reading-media-files#reading-track-metadata).
 
 ## Trimming
 

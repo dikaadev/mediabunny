@@ -1,6 +1,3 @@
-> [!NOTE]
-> I'm on vacation until 18 October, so expect slow or no replies to issues during that time. 🏖️
-
 # Mediabunny - JavaScript media toolkit
 
 [![](https://img.shields.io/npm/v/mediabunny)](https://www.npmjs.com/package/mediabunny)
@@ -42,17 +39,25 @@ Mediabunny is a JavaScript library for reading, writing, and converting media fi
   <a href="https://pqina.nl/pintura/" target="_blank" rel="sponsored">
     <img src="./docs/public/sponsors/pintura-labs.png" width="50" height="50" alt="Pintura Labs">
   </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://ponder.ai/" target="_blank" rel="sponsored">
+    <img src="./docs/public/sponsors/ponder.png" width="50" height="50" alt="Ponder">
+  </a>
 </div>
 
 ### Bronze sponsors
 
 <div align="center">
   <a href="https://www.reactvideoeditor.com/" target="_blank" rel="sponsored">
-    <img src="./docs/public/sponsors/rve.svg" width="40" height="40" alt="React Video Editor">
+    <img src="./docs/public/sponsors/rve.png" width="40" height="40" alt="React Video Editor">
   </a>
   &nbsp;&nbsp;&nbsp;&nbsp;
   <a href="https://www.mux.com/" target="_blank" rel="sponsored">
     <img src="./docs/public/sponsors/mux.jpg" width="40" height="40" alt="Mux">
+  </a>
+  &nbsp;&nbsp;&nbsp;&nbsp;
+  <a href="https://jellypod.ai/" target="_blank" rel="sponsored">
+    <img src="./docs/public/sponsors/jellypod.png" width="40" height="40" alt="Jellypod">
   </a>
 </div>
 
@@ -203,7 +208,7 @@ npm run lint # ESLint
 
 npm run docs:generate # Generates API docs
 npm run docs:dev # Start docs development server
-npm run dev # Start examples development server
-
+npm run dev # Start examples development server, will run at http://localhost:5173/examples/[name]/
+  
 npm run docs:build # Build docs and examples
 ```

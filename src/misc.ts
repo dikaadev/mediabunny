@@ -174,8 +174,8 @@ export const toDataView = (source: AllowSharedBufferSource) => {
 	}
 };
 
-export const textDecoder = new TextDecoder();
-export const textEncoder = new TextEncoder();
+export const textDecoder = /* #__PURE__ */ new TextDecoder();
+export const textEncoder = /* #__PURE__ */ new TextEncoder();
 
 export const isIso88591Compatible = (text: string) => {
 	for (let i = 0; i < text.length; i++) {
@@ -201,17 +201,17 @@ export const COLOR_PRIMARIES_MAP = {
 	bt2020: 9, // ITU-R BT.202
 	smpte432: 12, // SMPTE EG 432-1
 };
-export const COLOR_PRIMARIES_MAP_INVERSE = invertObject(COLOR_PRIMARIES_MAP);
+export const COLOR_PRIMARIES_MAP_INVERSE = /* #__PURE__ */ invertObject(COLOR_PRIMARIES_MAP);
 
 export const TRANSFER_CHARACTERISTICS_MAP = {
 	'bt709': 1, // ITU-R BT.709
 	'smpte170m': 6, // SMPTE 170M
 	'linear': 8, // Linear transfer characteristics
 	'iec61966-2-1': 13, // IEC 61966-2-1
-	'pg': 16, // Rec. ITU-R BT.2100-2 perceptual quantization (PQ) system
+	'pq': 16, // Rec. ITU-R BT.2100-2 perceptual quantization (PQ) system
 	'hlg': 18, // Rec. ITU-R BT.2100-2 hybrid loggamma (HLG) system
 };
-export const TRANSFER_CHARACTERISTICS_MAP_INVERSE = invertObject(TRANSFER_CHARACTERISTICS_MAP);
+export const TRANSFER_CHARACTERISTICS_MAP_INVERSE = /* #__PURE__ */ invertObject(TRANSFER_CHARACTERISTICS_MAP);
 
 export const MATRIX_COEFFICIENTS_MAP = {
 	'rgb': 0, // Identity
@@ -220,7 +220,7 @@ export const MATRIX_COEFFICIENTS_MAP = {
 	'smpte170m': 6, // SMPTE 170M
 	'bt2020-ncl': 9, // ITU-R BT.2020-2 (non-constant luminance)
 };
-export const MATRIX_COEFFICIENTS_MAP_INVERSE = invertObject(MATRIX_COEFFICIENTS_MAP);
+export const MATRIX_COEFFICIENTS_MAP_INVERSE = /* #__PURE__ */ invertObject(MATRIX_COEFFICIENTS_MAP);
 
 export type RequiredNonNull<T> = {
 	[K in keyof T]-?: NonNullable<T[K]>;
@@ -486,9 +486,14 @@ export const clamp = (value: number, min: number, max: number) => {
 
 export const UNDETERMINED_LANGUAGE = 'und';
 
-export const roundToPrecision = (value: number, digits: number) => {
-	const factor = 10 ** digits;
-	return Math.round(value * factor) / factor;
+export const roundIfAlmostInteger = (value: number) => {
+	const rounded = Math.round(value);
+
+	if (Math.abs(value / rounded - 1) < 10 * Number.EPSILON) {
+		return rounded;
+	} else {
+		return value;
+	}
 };
 
 export const roundToMultiple = (value: number, multiple: number) => {
@@ -510,7 +515,7 @@ export const isIso639Dash2LanguageCode = (x: string) => {
 };
 
 // Since the result will be truncated, add a bit of eps to compensate for floating point errors
-export const SECOND_TO_MICROSECOND_FACTOR = 1e6 * (1 + Number.EPSILON);
+export const SECOND_TO_MICROSECOND_FACTOR = /* #__PURE__ */ 1e6 * (1 + Number.EPSILON);
 
 /**
  * Sets all keys K of T to be required.
@@ -658,22 +663,14 @@ export class CallSerializer {
 	}
 }
 
-let isSafariCache: boolean | null = null;
-export const isSafari = () => {
-	if (isSafariCache !== null) {
-		return isSafariCache;
+let isWebKitCache: boolean | null = null;
+export const isWebKit = () => {
+	if (isWebKitCache !== null) {
+		return isWebKitCache;
 	}
 
-	const result = !!(
-		typeof navigator !== 'undefined'
-		&& navigator.vendor?.match(/apple/i)
-		&& !navigator.userAgent?.match(/crios/i)
-		&& !navigator.userAgent?.match(/fxios/i)
-		&& !navigator.userAgent?.match(/Opera|OPT\//)
-	);
-
-	isSafariCache = result;
-	return result;
+	// This even returns true for WebKit-wrapping browsers such as Chrome on iOS
+	return isWebKitCache = !!(typeof navigator !== 'undefined' && navigator.vendor?.match(/apple/i));
 };
 
 let isFirefoxCache: boolean | null = null;
@@ -683,6 +680,15 @@ export const isFirefox = () => {
 	}
 
 	return isFirefoxCache = typeof navigator !== 'undefined' && navigator.userAgent?.includes('Firefox');
+};
+
+let isChromiumCache: boolean | null = null;
+export const isChromium = () => {
+	if (isChromiumCache !== null) {
+		return isChromiumCache;
+	}
+
+	return isChromiumCache = !!(typeof navigator !== 'undefined' && navigator.vendor?.includes('Google Inc'));
 };
 
 /**

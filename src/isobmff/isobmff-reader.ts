@@ -6,7 +6,7 @@
  * file, You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-import { RichImageData } from '../tags';
+import { RichImageData } from '../metadata';
 import { textDecoder } from '../misc';
 import { FileSlice, readAscii, readBytes, readI32Be, readU16Be, readU32Be, readU64Be, readU8 } from '../reader';
 
@@ -67,6 +67,11 @@ export const readMetadataStringShort = (slice: FileSlice) => {
 export const readDataBox = (slice: FileSlice) => {
 	const header = readBoxHeader(slice);
 	if (!header || header.name !== 'data') {
+		return null;
+	}
+
+	if (slice.remainingLength < 8) {
+		// Box is too small
 		return null;
 	}
 
